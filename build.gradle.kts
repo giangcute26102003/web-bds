@@ -26,6 +26,7 @@ dependencies {
     implementation("io.quarkus:quarkus-elytron-security-jdbc")
     implementation("io.quarkus:quarkus-hibernate-orm-rest-data-panache")
     implementation("io.quarkus:quarkus-hibernate-orm-panache-kotlin")
+    implementation("io.quarkus:quarkus-rest-jackson")
     testImplementation("io.quarkus:quarkus-junit5")
     testImplementation("io.rest-assured:rest-assured")
     implementation("software.amazon.awssdk:s3:2.20.89")
