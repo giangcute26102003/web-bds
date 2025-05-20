@@ -18,13 +18,27 @@ class PropertyImageResource {
     fun list(@PathParam("propertyId") propertyId: Long): Response {
         try {
             // Kiểm tra xem property có tồn tại không
-            val property = Property.findById(propertyId) ?: return Response
-                .status(Response.Status.NOT_FOUND)
-                .entity(mapOf("error" to "Property not found"))
-                .build()
+            val property = Property.findById(propertyId)
+                ?: return Response
+                    .status(Response.Status.NOT_FOUND)
+                    .entity(mapOf("error" to "Property not found"))
+                    .build()
 
-            val images = PropertyImage.list("property.id", propertyId)
+            // Lấy danh sách ảnh và chuyển sang DTO để tránh vòng lặp
+            val images = PropertyImage
+                .list("property.id", propertyId)
+                .map { image ->
+                    image.id?.let {
+                        PropertyImageDTO(
+                            id = it,
+                            isMain = image.isMain,
+                            url = image.imageUrl // thay thế bằng tên field thật trong entity của bạn
+                        )
+                    }
+                }
+
             return Response.ok(images).build()
+
         } catch (e: Exception) {
             return Response
                 .serverError()
@@ -32,6 +46,7 @@ class PropertyImageResource {
                 .build()
         }
     }
+
 
     @PUT
     @Path("/{imageId}/main")
@@ -41,43 +56,51 @@ class PropertyImageResource {
         @PathParam("imageId") imageId: Long
     ): Response {
         try {
-            // Kiểm tra xem property có tồn tại không
-            val property = Property.findById(propertyId) ?: return Response
-                .status(Response.Status.NOT_FOUND)
-                .entity(mapOf("error" to "Property not found"))
-                .build()
+            // Tìm property
+            val property = Property.findById(propertyId)
+                ?: return Response.status(Response.Status.NOT_FOUND)
+                    .entity(mapOf("error" to "Property not found"))
+                    .build()
 
-            // Lấy ảnh đang cần set main
+            // Tìm ảnh
             val image = PropertyImage.findById(imageId)
                 ?: return Response.status(Response.Status.NOT_FOUND)
                     .entity(mapOf("error" to "Image not found"))
                     .build()
 
-            // Kiểm tra xem ảnh có thuộc property này không
+            // Ảnh không thuộc property này
             if (image.property.id != propertyId) {
                 return Response.status(Response.Status.BAD_REQUEST)
                     .entity(mapOf("error" to "Image does not belong to this property"))
                     .build()
             }
 
-            // Bỏ cờ isMain của ảnh cũ
-            PropertyImage.update("isMain = false where property.id = ?1", propertyId)
+            // Unset isMain của tất cả ảnh thuộc property này
+            PropertyImage.update("isMain = false WHERE property.id = ?1", propertyId)
 
-            // Set ảnh mới làm main
+            // Set ảnh được chọn thành main
             image.isMain = true
             image.persist()
 
-            return Response.ok(image).build()
+            // Trả về DTO để tránh vòng lặp JSON
+            val dto = image.id?.let {
+                PropertyImageDTO(
+                    id = it,
+                    url = image.imageUrl,
+                    isMain = image.isMain
+                )
+            }
+
+            return Response.ok(dto).build()
+
         } catch (e: Exception) {
-            return Response
-                .serverError()
+            return Response.serverError()
                 .entity(mapOf("error" to "Failed to set main image: ${e.message}"))
                 .build()
         }
     }
 
     data class OrderRequest(val sortOrder: Int)
-
     @PUT
     @Path("/{imageId}/order")
     @Transactional
@@ -87,27 +110,24 @@ class PropertyImageResource {
         request: OrderRequest
     ): Response {
         try {
-            // Lấy ảnh đang cần update
             val image = PropertyImage.findById(imageId)
                 ?: return Response.status(Response.Status.NOT_FOUND)
                     .entity(mapOf("error" to "Image not found"))
                     .build()
 
-            // Kiểm tra xem ảnh có thuộc property này không
             if (image.property.id != propertyId) {
                 return Response.status(Response.Status.BAD_REQUEST)
                     .entity(mapOf("error" to "Image does not belong to this property"))
                     .build()
             }
 
-            // Cập nhật thứ tự
             image.sortOrder = request.sortOrder
             image.persist()
 
             return Response.ok(image).build()
+
         } catch (e: Exception) {
-            return Response
-                .serverError()
+            return Response.serverError()
                 .entity(mapOf("error" to "Failed to update image order: ${e.message}"))
                 .build()
         }
@@ -148,3 +168,8 @@ class PropertyImageResource {
         }
     }
 }
+data class PropertyImageDTO(
+    val id: Long,
+    val url: String,
+    val isMain: Boolean
+)
